@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OT Cybersecurity Defense Simulator | IEC 62443 Hybrid Power Plant</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        cyber: {
+                            bg: '#050811',
+                            panel: '#0e1626',
+                            border: '#1e2d4a',
+                            neonCyan: '#00f0ff',
+                            neonGreen: '#00ff66',
+                            neonRed: '#ff0055',
+                            neonYellow: '#ffb700',
+                            neonPurple: '#a855f7'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Fonts & Font Awesome Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Chakra Petch', sans-serif;
+            background-color: #050811;
+            color: #e2e8f0;
+            user-select: none;
+        }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Glowing Neon Utilities */
+        .glow-cyan { text-shadow: 0 0 8px rgba(0, 240, 255, 0.6); }
+        .glow-red { text-shadow: 0 0 8px rgba(ff, 0, 85, 0.7); }
+        .glow-green { text-shadow: 0 0 8px rgba(0, 255, 102, 0.6); }
+        .border-glow-cyan { box-shadow: 0 0 12px rgba(0, 240, 255, 0.3); }
+        .border-glow-red { box-shadow: 0 0 15px rgba(255, 0, 85, 0.5); }
+
+        /* Pulse Animation for Threats */
+        @keyframes cyberPulse {
+            0%, 100% { border-color: #ff0055; box-shadow: 0 0 15px rgba(255, 0, 85, 0.6); }
+            50% { border-color: #7f1d1d; box-shadow: 0 0 4px rgba(255, 0, 85, 0.2); }
+        }
+        .threat-alert-anim {
+            animation: cyberPulse 1s infinite;
+        }
+
+        /* Drag-and-Drop styling */
+        .draggable-item {
+            cursor: grab;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .draggable-item:active { cursor: grabbing; transform: scale(1.03); }
+        .drop-zone {
+            transition: all 0.2s ease-in-out;
+        }
+        .drop-zone.drag-over {
+            border-color: #00f0ff !important;
+            background-color: rgba(0, 240, 255, 0.1) !important;
+        }
+
+        /* Scanline CRT FX */
+        .crt-overlay::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+            background-size: 100% 4px;
+            z-index: 30;
+            pointer-events: none;
+            opacity: 0.3;
+        }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #050811; }
+        ::-webkit-scrollbar-thumb { background: #1e2d4a; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00f0ff; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col crt-overlay overflow-x-hidden">
+
+    <!-- Top HUD / Status Header -->
+    <header class="bg-cyber-panel border-b border-cyber-border px-6 py-3 flex flex-wrap items-center justify-between sticky top-0 z-40 shadow-2xl">
+        <div class="flex items-center space-x-3">
+            <div class="bg-cyber-neonCyan/10 p-2 rounded-lg border border-cyber-neonCyan/40 text-cyber-neonCyan">
+                <i class="fa-solid fa-shield-cat text-2xl"></i>
+            </div>
+            <div>
+                <h1 class="text-base font-bold tracking-wider text-white flex items-center gap-2">
+                    <span>OT CYBER DEFENSE SIMULATOR</span>
+                    <span class="text-xs font-mono bg-cyber-neonCyan/20 text-cyber-neonCyan px-2 py-0.5 rounded border border-cyber-neonCyan/30">IEC 62443 SL-2</span>
+                </h1>
+                <p class="text-xs text-slate-400 font-mono">Hybrid Power Plant Target: Solar PV (50MW) + OPV (10MW) + BESS (20MW/40MWh)</p>
+            </div>
+        </div>
+
+        <!-- Dynamic Game Metrics HUD -->
+        <div class="flex items-center space-x-6 my-2 sm:my-0 flex-wrap gap-y-2 font-mono">
+            <!-- Budget -->
+            <div class="bg-cyber-bg px-3 py-1.5 rounded border border-cyber-border flex items-center space-x-2">
+                <i class="fa-solid fa-wallet text-amber-400"></i>
+                <span class="text-xs text-slate-400">Budget:</span>
+                <span id="hud-budget" class="text-sm font-bold text-amber-400">$100,000</span>
+            </div>
+
+            <!-- Security Posture -->
+            <div class="bg-cyber-bg px-3 py-1.5 rounded border border-cyber-border flex items-center space-x-2">
+                <i class="fa-solid fa-shield-halved text-cyber-neonCyan"></i>
+                <span class="text-xs text-slate-400">Security Score:</span>
+                <span id="hud-security" class="text-sm font-bold text-cyber-neonCyan">45%</span>
+            </div>
+
+            <!-- Plant Availability -->
+            <div class="bg-cyber-bg px-3 py-1.5 rounded border border-cyber-border flex items-center space-x-2">
+                <i class="fa-solid fa-bolt text-cyber-neonGreen"></i>
+                <span class="text-xs text-slate-400">Plant Output:</span>
+                <span id="hud-availability" class="text-sm font-bold text-cyber-neonGreen">80.0 MW (100%)</span>
+            </div>
+
+            <!-- Threat Level -->
+            <div class="bg-cyber-bg px-3 py-1.5 rounded border border-cyber-border flex items-center space-x-2">
+                <i class="fa-solid fa-triangle-exclamation text-emerald-400" id="hud-threat-icon"></i>
+                <span class="text-xs text-slate-400">Alert Status:</span>
+                <span id="hud-threat-level" class="text-sm font-bold text-emerald-400">LOW</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs / Mode Selector -->
+    <div class="bg-cyber-bg border-b border-cyber-border px-6 py-2.5 flex items-center justify-between overflow-x-auto gap-4">
+        <div class="flex items-center space-x-2 shrink-0">
+            <button onclick="switchMode('topo')" id="tab-topo" class="mode-tab active bg-cyber-neonCyan text-cyber-bg font-bold px-4 py-1.5 rounded text-xs transition flex items-center gap-2">
+                <i class="fa-solid fa-sitemap"></i>
+                <span>MODE 1: ARCHITECTURE & TOPOLOGY FIX</span>
+            </button>
+            <button onclick="switchMode('threats')" id="tab-threats" class="mode-tab bg-cyber-panel hover:bg-slate-800 text-slate-300 border border-cyber-border px-4 py-1.5 rounded text-xs transition flex items-center gap-2">
+                <i class="fa-solid fa-bug"></i>
+                <span>MODE 2: INCIDENT RESPONSE SIMULATOR</span>
+                <span id="threat-badge" class="bg-cyber-neonRed text-white px-1.5 py-0.2 text-[10px] rounded-full hidden">!</span>
+            </button>
+            <button onclick="switchMode('audit')" id="tab-audit" class="mode-tab bg-cyber-panel hover:bg-slate-800 text-slate-300 border border-cyber-border px-4 py-1.5 rounded text-xs transition flex items-center gap-2">
+                <i class="fa-solid fa-clipboard-check"></i>
+                <span>MODE 3: IEC 62443 / NIS 2 AUDIT</span>
+            </button>
+        </div>
+
+        <div class="text-xs text-slate-400 font-mono hidden md:block">
+            Target IEC 62443 Security Level: <span class="text-cyber-neonCyan font-bold">SL-2 (Enhanced Protection)</span>
+        </div>
+    </div>
+
+    <!-- Main Game Workspace -->
+    <main class="flex-1 p-4 lg:p-6 max-w-[1920px] mx-auto w-full grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+        <!-- Left / Central View Area (3 Columns) -->
+        <div class="lg:col-span-3 flex flex-col space-y-4">
+
+            <!-- MODE 1: ARCHITECTURE TOPOLOGY MAP & FIXER -->
+            <div id="view-topo" class="space-y-4">
+                <div class="bg-cyber-panel border border-cyber-border rounded-xl p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <div>
+                            <h2 class="text-sm font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-network-wired text-cyber-neonCyan"></i>
+                                <span>IEC 62443 & PURDUE MODEL ARCHITECTURE DEFENSE</span>
+                            </h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Drag security equipment and assign VLAN/zone policies from your inventory to their appropriate Purdue Level drop zones.</p>
+                        </div>
+                        <button onclick="checkTopology()" class="bg-cyber-neonCyan hover:bg-cyan-400 text-cyber-bg font-bold px-4 py-1.5 rounded text-xs transition flex items-center gap-2">
+                            <i class="fa-solid fa-check-double"></i>
+                            <span>VERIFY ARCHITECTURE COMPLIANCE</span>
+                        </button>
+                    </div>
+
+                    <!-- Available Unassigned Equipment Inventory -->
+                    <div class="bg-cyber-bg border border-cyber-border rounded-lg p-3 mb-4">
+                        <span class="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider block mb-2">Unassigned Security Devices & Network Rules (Drag to Target Zone):</span>
+                        <div id="inventory-container" class="flex flex-wrap gap-2 min-h-[50px] items-center">
+                            <!-- Draggable Items Rendered via JS -->
+                        </div>
+                    </div>
+
+                    <!-- PURDUE MODEL DROP ZONES -->
+                    <div class="space-y-3 font-mono">
+                        
+                        <!-- Level 4 -->
+                        <div class="border border-rose-500/30 bg-rose-950/10 rounded-lg p-3">
+                            <div class="flex justify-between text-xs text-rose-400 font-bold mb-2">
+                                <span>LEVEL 4: ENTERPRISE & GRID INTERFACE ZONE</span>
+                                <span>WAN / Enterprise IPsec</span>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                                <div class="bg-cyber-bg border border-slate-700 p-2 rounded">
+                                    <div class="text-slate-300 font-bold">TSO/DSO Control Center</div>
+                                    <div class="text-[10px] text-slate-500">IEC 60870-5-104 / DNP3</div>
+                                </div>
+                                <div class="bg-cyber-bg border border-slate-700 p-2 rounded">
+                                    <div class="text-slate-300 font-bold">Aggregator EMS / Market</div>
+                                    <div class="text-[10px] text-slate-500">REST API / MQTT HTTPS</div>
+                                </div>
+                                <div id="drop-l4" data-zone="L4" class="drop-zone border-2 border-dashed border-rose-500/40 rounded p-2 flex items-center justify-center min-h-[48px] text-slate-500 text-[11px]">
+                                    Drop Enterprise Firewall / ZTNA Rule Here
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Level 3.5 DMZ -->
+                        <div class="border border-purple-500/30 bg-purple-950/10 rounded-lg p-3">
+                            <div class="flex justify-between text-xs text-purple-400 font-bold mb-2">
+                                <span>LEVEL 3.5: INDUSTRIAL DMZ (PERIMETER PROTECTION)</span>
+                                <span>Dual Stateful Firewalls / Proxy Zone</span>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                                <div id="drop-l35-pam" data-zone="L3.5-PAM" class="drop-zone border-2 border-dashed border-purple-500/40 rounded p-2 flex items-center justify-center min-h-[48px] text-slate-500 text-[11px]">
+                                    Drop PAM / MFA Remote Access Vault Here
+                                </div>
+                                <div id="drop-l35-proxy" data-zone="L3.5-PROXY" class="drop-zone border-2 border-dashed border-purple-500/40 rounded p-2 flex items-center justify-center min-h-[48px] text-slate-500 text-[11px]">
+                                    Drop Unidirectional DMZ Reverse Proxy Here
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Level 3 -->
+                        <div class="border border-blue-500/30 bg-blue-950/10 rounded-lg p-3">
+                            <div class="flex justify-between text-xs text-blue-400 font-bold mb-2">
+                                <span>LEVEL 3: OPERATIONS & MANAGEMENT SERVICES ZONE</span>
+                                <span>10GbE Optical LAN / Syslog / PTP</span>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs">
+                                <div class="bg-cyber-bg border border-slate-700 p-2 rounded">
+                                    <div class="text-slate-300 font-bold">Redundant SCADA (Master A/B)</div>
+                                    <div class="text-[10px] text-slate-500">OPC UA / Modbus TCP</div>
+                                </div>
+                                <div class="bg-cyber-bg border border-slate-700 p-2 rounded">
+                                    <div class="text-slate-300 font-bold">Bazefield RES Analytics</div>
+                                    <div class="text-[10px] text-slate-500">OPC UA Client</div>
+                                </div>
+                                <div class="bg-cyber-bg border border-slate-700 p-2 rounded">
+                                    <div class="text-slate-300 font-bold">Plant Historian Server</div>
+                                    <div class="text-[10px] text-slate-500">OSIsoft PI / SQL</div>
+                                </div>
+                                <div id="drop-l3-siem" data-zone="L3-SIEM" class="drop-zone border-2 border-dashed border-blue-500/40 rounded p-2 flex items-center justify-center min-h-[48px] text-slate-500 text-[11px]">
+                                    Drop SIEM Log Collector Server Here
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs mt-2">
+                                <div class="bg-cyber-bg border border-slate-700 p-2 rounded">
+                                    <div class="text-slate-300 font-bold">NTP Master Clock</div>
+                                    <div class="text-[10px] text-slate-500">GNSS PTP Time Sync</div>
+                                </div>
+                                <div id="drop-l3-wsus" data-zone="L3-WSUS" class="drop-zone border-2 border-dashed border-blue-500/40 rounded p-2 flex items-center justify-center min-h-[48px] text-slate-500 text-[11px]">
+                                    Drop WSUS / Firmware Update Server Here
+                                </div>
+                                <div id="drop-l3-edr" data-zone="L3-EDR" class="drop-zone border-2 border-dashed border-blue-500/40 rounded p-2 flex items-center justify-center min-h-[48px] text-slate-500 text-[11px]">
+                                    Drop Antivirus / EDR Console Here
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Level 2 -->
+                        <div class="border border-cyan-500/30 bg-cyan-950/10 rounded-lg p-3">
+                            <div class="flex justify-between text-xs text-cyan-400 font-bold mb-2">
+                                <span>LEVEL 2: PLANT SUPERVISORY & SUBSTATION AUTOMATION ZONE</span>
+                                <span>IEC 61850 GOOSE/MMS / PRP Optical Ring</span>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                                <div class="bg-cyber-bg border border-slate-700 p-2 rounded">
+                                    <div class="text-slate-300 font-bold">Redundant PPC (Master A/B)</div>
+                                    <div class="text-[10px] text-slate-500">Closed-Loop Power Control</div>
+                                </div>
+                                <div class="bg-cyber-bg border border-slate-700 p-2 rounded">
+                                    <div class="text-slate-300 font-bold">Substation RTU Gateway</div>
+                                    <div class="text-[10px] text-slate-500">IEC 60870-5-104</div>
+                                </div>
+                                <div id="drop-l2-substation" data-zone="L2-VLAN" class="drop-zone border-2 border-dashed border-cyan-500/40 rounded p-2 flex items-center justify-center min-h-[48px] text-slate-500 text-[11px]">
+                                    Drop Substation Protection VLAN Rule Here
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Level 1 & Level 0 -->
+                        <div class="border border-emerald-500/30 bg-emerald-950/10 rounded-lg p-3">
+                            <div class="flex justify-between text-xs text-emerald-400 font-bold mb-2">
+                                <span>LEVEL 1 & LEVEL 0: BAY CONTROL & PHYSICAL GENERATION FIELD ZONE</span>
+                                <span>Modbus TCP / SunSpec / RS485 / CAN bus / HV Primary</span>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs">
+                                <div class="bg-cyber-bg border border-slate-700 p-2 rounded">
+                                    <div class="text-slate-300 font-bold">Solar PV Inverters</div>
+                                    <div class="text-[10px] text-slate-500 font-mono">Modbus TCP</div>
+                                </div>
+                                <div id="drop-l1-opv" data-zone="L1-OPV" class="drop-zone border-2 border-dashed border-emerald-500/40 rounded p-2 flex items-center justify-center min-h-[48px] text-slate-500 text-[11px]">
+                                    Drop OPV RS485 Opto-Isolator Gateway Here
+                                </div>
+                                <div class="bg-cyber-bg border border-slate-700 p-2 rounded">
+                                    <div class="text-slate-300 font-bold">BESS PCS Inverters & BMS</div>
+                                    <div class="text-[10px] text-slate-500 font-mono">Modbus TCP / CAN</div>
+                                </div>
+                                <div class="bg-cyber-bg border border-slate-700 p-2 rounded">
+                                    <div class="text-slate-300 font-bold">HV Switchgear & Main Trafo</div>
+                                    <div class="text-[10px] text-slate-500 font-mono">Hardwired I/O</div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODE 2: THREAT INCIDENT RESPONSE SIMULATOR -->
+            <div id="view-threats" class="space-y-4 hidden">
+                <div class="bg-cyber-panel border border-cyber-border rounded-xl p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <div>
+                            <h2 class="text-sm font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-skull-crossbones text-cyber-neonRed"></i>
+                                <span>REAL-TIME OT CYBER THREAT RESPONDER</span>
+                            </h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Active cyberattacks detected across the Purdue levels! Select an incident and execute the correct IEC 62443 countermeasure before plant shutdown occurs.</p>
+                        </div>
+                    </div>
+
+                    <!-- Threat Selector Cards -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4" id="threat-cards-container">
+                        <!-- Rendered dynamically -->
+                    </div>
+
+                    <!-- Active Threat Investigation Terminal -->
+                    <div id="threat-terminal" class="bg-cyber-bg border border-cyber-border rounded-lg p-4 hidden font-mono">
+                        <div class="flex justify-between items-center pb-2 border-b border-cyber-border mb-3">
+                            <span class="text-xs font-bold text-cyber-neonRed flex items-center gap-2">
+                                <i class="fa-solid fa-triangle-exclamation animate-bounce"></i>
+                                <span id="active-threat-title">ATTACK IN PROGRESS</span>
+                            </span>
+                            <span id="active-threat-target" class="text-xs text-amber-400 font-bold">Target Zone: L1 Solar PV</span>
+                        </div>
+
+                        <p id="active-threat-desc" class="text-xs text-slate-300 leading-relaxed mb-4">
+                            Details about attack...
+                        </p>
+
+                        <!-- Countermeasure Options -->
+                        <div class="space-y-2">
+                            <span class="text-xs text-slate-400 font-bold uppercase block">Select Countermeasure Action:</span>
+                            <div id="active-threat-options" class="grid grid-cols-1 gap-2">
+                                <!-- Dynamic Options -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODE 3: IEC 62443 & NIS 2 COMPLIANCE AUDIT -->
+            <div id="view-audit" class="space-y-4 hidden">
+                <div class="bg-cyber-panel border border-cyber-border rounded-xl p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <div>
+                            <h2 class="text-sm font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-clipboard-check text-cyber-neonPurple"></i>
+                                <span>IEC 62443 & NIS 2 CYBERSECURITY AUDIT</span>
+                            </h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Answer complex OT cybersecurity compliance scenarios to pass the external regulatory audit.</p>
+                        </div>
+                        <span id="audit-progress" class="text-xs font-mono text-cyber-neonPurple font-bold">Question 1 of 4</span>
+                    </div>
+
+                    <div id="audit-card" class="bg-cyber-bg border border-cyber-border rounded-lg p-5 space-y-4">
+                        <h3 id="audit-question-title" class="text-sm font-bold text-white">Scenario Question...</h3>
+                        <div id="audit-options" class="space-y-2 font-mono text-xs">
+                            <!-- Options rendered via JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Event & Security Activity Terminal -->
+            <div class="bg-cyber-panel border border-cyber-border rounded-xl p-3">
+                <div class="flex items-center justify-between pb-2 border-b border-cyber-border mb-2 text-xs font-mono text-slate-400">
+                    <span class="flex items-center gap-2">
+                        <i class="fa-solid fa-terminal text-cyber-neonCyan"></i>
+                        <span>SIEM AUDIT & THREAT CONSOLE LOGS</span>
+                    </span>
+                    <button onclick="clearLogs()" class="hover:text-white"><i class="fa-solid fa-trash-can"></i> Clear</button>
+                </div>
+                <div id="console-logs" class="font-mono text-[11px] space-y-1 max-h-36 overflow-y-auto pr-2 text-slate-300">
+                    <div>[SYS INIT] OT Security Defense Console operational. Target: Hybrid Solar+OPV+BESS Plant.</div>
+                    <div>[AUDIT] Current Security Posture: 45%. Complete topology setup to increase defense score.</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Side: Cyber Inspector & Help Panel (1 Column) -->
+        <div class="lg:col-span-1">
+            <div class="bg-cyber-panel border border-cyber-border rounded-xl p-4 sticky top-20 shadow-2xl flex flex-col space-y-4">
+                <div class="border-b border-cyber-border pb-3">
+                    <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-book-bookmark text-cyber-neonCyan"></i>
+                        <span>IEC 62443 ARCHITECTURE GUIDE</span>
+                    </h3>
+                    <p class="text-[11px] text-slate-400 mt-1">Defense-in-Depth Principles for Hybrid Power Plants:</p>
+                </div>
+
+                <div class="space-y-3 text-xs text-slate-300 leading-relaxed font-mono">
+                    <div class="bg-cyber-bg p-2.5 rounded border border-cyber-border">
+                        <strong class="text-purple-400 block mb-0.5">L3.5 DMZ Segmentation:</strong>
+                        Never allow direct Level 4 IT connections into Level 3/2 OT networks. Force RDP/SSH through PAM Jump Hosts with MFA.
+                    </div>
+
+                    <div class="bg-cyber-bg p-2.5 rounded border border-cyber-border">
+                        <strong class="text-cyan-400 block mb-0.5">IEC 61850 Substation VLAN:</strong>
+                        GOOSE messaging operates directly on Layer 2 (Ethernet) for sub-4ms trip speed. Isolate GOOSE traffic within dedicated Substation VLANs.
+                    </div>
+
+                    <div class="bg-cyber-bg p-2.5 rounded border border-cyber-border">
+                        <strong class="text-emerald-400 block mb-0.5">Organic PV (OPV) RS485 Loops:</strong>
+                        Serial RS485 loops crossing outdoor field arrays require optical isolation gateways to prevent ground loops and serial injection attacks.
+                    </div>
+
+                    <div class="bg-cyber-bg p-2.5 rounded border border-cyber-border">
+                        <strong class="text-blue-400 block mb-0.5">PPC Failover Security:</strong>
+                        Redundant PPC Master A/B heartbeat loops must be authenticated to prevent rogue PLC takeover or setpoint spoofing.
+                    </div>
+                </div>
+
+                <!-- Quick Action Tool -->
+                <div class="pt-2 border-t border-cyber-border">
+                    <button onclick="purchaseEmergencyShield()" class="w-full bg-cyber-bg hover:bg-slate-800 text-amber-400 border border-amber-500/40 px-3 py-2 rounded text-xs font-bold transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-shield-virus"></i>
+                        <span>BUY DEEP PACKET INSPECTION ($20k)</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Game Script Logic -->
+    <script>
+        // Game State Variables
+        let state = {
+            budget: 100000,
+            securityScore: 45,
+            availabilityMW: 80.0,
+            threatLevel: 'LOW', // LOW, ELEVATED, CRITICAL
+            inventory: [
+                { id: 'item-pam', name: 'WALLIX PAM / MFA Vault', zone: 'L3.5-PAM', cost: 15000, placed: false, desc: 'Enforces MFA & session recording for remote vendors.' },
+                { id: 'item-proxy', name: 'Unidirectional DMZ Proxy', zone: 'L3.5-PROXY', cost: 12000, placed: false, desc: 'Stops direct inbound telemetry queries.' },
+                { id: 'item-siem', name: 'Log Collector (SIEM)', zone: 'L3-SIEM', cost: 10000, placed: false, desc: 'Aggregates Syslog/audit logs across all levels.' },
+                { id: 'item-wsus', name: 'WSUS Patch / Firmware Server', zone: 'L3-WSUS', cost: 8000, placed: false, desc: 'Central offline patch & firmware staging.' },
+                { id: 'item-edr', name: 'Antivirus / EDR Console', zone: 'L3-EDR', cost: 9000, placed: false, desc: 'Central endpoint threat protection for OT HMIs.' },
+                { id: 'item-fw4', name: 'Enterprise ZTNA Firewall', zone: 'L4', cost: 12000, placed: false, desc: 'Perimeter firewall between Corporate IT & DMZ.' },
+                { id: 'item-vlan', name: 'IEC 61850 Substation VLAN', zone: 'L2-VLAN', cost: 7000, placed: false, desc: 'Isolates Layer-2 GOOSE multicast trips.' },
+                { id: 'item-opv-gw', name: 'OPV RS485 Opto-Gateway', zone: 'L1-OPV', cost: 6000, placed: false, desc: 'Optically isolates serial OPV array strings.' }
+            ],
+            threats: [
+                {
+                    id: 'threat-1',
+                    title: 'L1 Inverter Modbus TCP Spoofing',
+                    target: 'Level 1 Solar PV Inverters',
+                    active: true,
+                    desc: 'A rogue laptop plugged into an outdoor field switch is injecting Modbus TCP write commands to alter inverter power limits.',
+                    options: [
+                        { text: 'Deploy Port Security & 802.1X MAC Binding on Field Switches', correct: true, rewardScore: 15, msg: 'Field switch ports locked down. Modbus TCP spoofing blocked.' },
+                        { text: 'Reboot the Primary SCADA Server', correct: false, penaltyMW: 20.0, msg: 'SCADA reboot caused temporary loss of plant visibility (-20 MW output).' },
+                        { text: 'Disconnect BESS Battery Containers', correct: false, penaltyMW: 10.0, msg: 'Unnecessary BESS isolation reduced frequency response capacity.' }
+                    ]
+                },
+                {
+                    id: 'threat-2',
+                    title: 'Direct RDP Attack Bypassing PAM',
+                    target: 'Level 3 SCADA Master',
+                    active: true,
+                    desc: 'Compromised IT contractor credentials are attempting a direct RDP connection from Level 4 WAN to Level 3 SCADA Master A.',
+                    options: [
+                        { text: 'Block direct L4->L3 RDP at Firewall & Enforce L3.5 PAM / MFA Jump Host', correct: true, rewardScore: 15, msg: 'Direct RDP connection dropped. Rogue session diverted to PAM MFA challenge.' },
+                        { text: 'Disable RDP Service on SCADA Master', correct: false, penaltyMW: 15.0, msg: 'Disabling RDP broke remote engineering maintenance capabilities.' },
+                        { text: 'Ignore alert (It might be routine maintenance)', correct: false, penaltyMW: 40.0, msg: 'Ransomware executed on SCADA Master! Plant output heavily degraded (-40 MW).' }
+                    ]
+                },
+                {
+                    id: 'threat-3',
+                    title: 'SMB Ransomware Worm Propagation',
+                    target: 'Level 3 Historian & EWS',
+                    active: false,
+                    desc: 'Unpatched SMBv1 vulnerability detected spreading laterally from a compromised Engineering Workstation.',
+                    options: [
+                        { text: 'Isolate EWS VLAN, Disable SMBv1 & Push Emergency WSUS Patch', correct: true, rewardScore: 15, msg: 'Worm contained! Emergency patch pushed via WSUS server.' },
+                        { text: 'Shutdown Main Transformer Breakers', correct: false, penaltyMW: 80.0, msg: 'Total plant shutdown triggered! Huge operational loss (-80 MW).' }
+                    ]
+                },
+                {
+                    id: 'threat-4',
+                    title: 'Substation IED GOOSE ARP Spoofing',
+                    target: 'Level 2 Protection Relays',
+                    active: false,
+                    desc: 'Man-in-the-Middle ARP poisoning detected on the Substation Ethernet bus attempting to forge IEC 61850 GOOSE breaker trip signals.',
+                    options: [
+                        { text: 'Enable Dynamic ARP Inspection (DAI) & GOOSE VLAN Segmentation', correct: true, rewardScore: 15, msg: 'ARP spoofing neutralized. Substation GOOSE bus secured.' },
+                        { text: 'Switch Substation Relays to Manual Control', correct: false, penaltyMW: 30.0, msg: 'Manual override delayed protection trip times.' }
+                    ]
+                }
+            ],
+            auditQuestions: [
+                {
+                    q: 'Which IEC 62443 requirement governs the boundary between Level 4 Enterprise WAN and Level 3 Industrial Operations?',
+                    options: [
+                        { text: 'IEC 62443-3-3: Enforcement of an Industrial DMZ (Level 3.5) with stateful inspection', correct: true },
+                        { text: 'IEC 62443-2-1: Direct open port routing without proxying', correct: false },
+                        { text: 'Allowing direct RDP access if protected by Windows Firewall', correct: false }
+                    ]
+                },
+                {
+                    q: 'Why are IEC 61850 GOOSE messages restricted to dedicated Layer-2 VLANs rather than routed IP networks?',
+                    options: [
+                        { text: 'GOOSE messages require sub-4ms transmission for critical trip protection and do not use IP headers', correct: true },
+                        { text: 'GOOSE messages only work over serial RS485 wires', correct: false },
+                        { text: 'To allow corporate IT servers to poll breaker state directly', correct: false }
+                    ]
+                },
+                {
+                    q: 'What is the correct cybersecurity policy for maintaining Redundant PPC Master A/B heartbeat communication?',
+                    options: [
+                        { text: 'Encrypt & authenticate heartbeat traffic over an isolated point-to-point Ethernet link with anti-replay protection', correct: true },
+                        { text: 'Broadcast heartbeat frames unauthenticated across Level 4 Enterprise WAN', correct: false },
+                        { text: 'Use unencrypted Telnet commands every 50ms', correct: false }
+                    ]
+                }
+            ],
+            currentAuditIdx: 0,
+            activeThreatId: null
+        };
+
+        // Initialize Game Canvas & Elements
+        window.onload = function() {
+            renderInventory();
+            renderThreats();
+            renderAuditQuestion();
+            updateHUD();
+            logConsole('[GAME LOADED] System ready. Complete Level 1 Architecture topology first.');
+        };
+
+        // Render Inventory Draggable Items
+        function renderInventory() {
+            const container = document.getElementById('inventory-container');
+            container.innerHTML = '';
+
+            state.inventory.forEach(item => {
+                if (!item.placed) {
+                    const div = document.createElement('div');
+                    div.className = 'draggable-item bg-cyber-panel border border-cyber-neonCyan/50 px-2.5 py-1.5 rounded text-xs flex items-center gap-2 font-mono hover:border-cyber-neonCyan';
+                    div.draggable = true;
+                    div.id = item.id;
+                    div.innerHTML = `
+                        <i class="fa-solid fa-puzzle-piece text-cyber-neonCyan"></i>
+                        <span>${item.name} ($${(item.cost/1000).toFixed(0)}k)</span>
+                    `;
+
+                    div.ondragstart = (e) => {
+                        e.dataTransfer.setData('text/plain', item.id);
+                    };
+
+                    container.appendChild(div);
+                }
+            });
+
+            setupDropZones();
+        }
+
+        // Setup Drop Zone Drag-and-Drop Handlers
+        function setupDropZones() {
+            const zones = document.querySelectorAll('.drop-zone');
+            zones.forEach(zone => {
+                zone.ondragover = (e) => {
+                    e.preventDefault();
+                    zone.classList.add('drag-over');
+                };
+                zone.ondragleave = () => {
+                    zone.classList.remove('drag-over');
+                };
+                zone.ondrop = (e) => {
+                    e.preventDefault();
+                    zone.classList.remove('drag-over');
+                    const itemId = e.dataTransfer.getData('text/plain');
+                    handleDrop(itemId, zone.dataset.zone, zone);
+                };
+            });
+        }
+
+        // Handle Item Placement
+        function handleDrop(itemId, targetZone, zoneEl) {
+            const item = state.inventory.find(i => i.id === itemId);
+            if (!item) return;
+
+            if (item.zone !== targetZone) {
+                logConsole(`[TOPOLOGY REJECTED] Cannot place ${item.name} in zone ${targetZone}. Incorrect IEC 62443 level!`, 'red');
+                return;
+            }
+
+            if (state.budget < item.cost) {
+                logConsole(`[BUDGET ERROR] Insufficient funds to deploy ${item.name} ($${item.cost}).`, 'red');
+                return;
+            }
+
+            // Deduct cost & update state
+            state.budget -= item.cost;
+            item.placed = true;
+            state.securityScore += 7;
+
+            // Render placed card in zone
+            zoneEl.className = 'bg-cyber-bg border border-cyber-neonGreen p-2 rounded text-xs flex items-center justify-between text-cyber-neonGreen font-mono';
+            zoneEl.innerHTML = `
+                <span class="font-bold"><i class="fa-solid fa-circle-check mr-1"></i>${item.name}</span>
+                <span class="text-[10px] text-slate-400 font-normal">Deployed</span>
+            `;
+
+            logConsole(`[DEPLOYED] ${item.name} active in zone ${targetZone}. Security score +7%.`, 'cyan');
+            renderInventory();
+            updateHUD();
+        }
+
+        // Check Overall Topology Compliance
+        function checkTopology() {
+            const totalItems = state.inventory.length;
+            const placedItems = state.inventory.filter(i => i.placed).length;
+
+            if (placedItems === totalItems) {
+                logConsole('[AUDIT PASSED] Architecture fully compliant with IEC 62443 Level 0-4 segmentation guidelines!', 'green');
+                state.securityScore = Math.max(state.securityScore, 85);
+                updateHUD();
+                alert('CONGRATULATIONS! Your Purdue Model architecture segmentation is 100% compliant with IEC 62443 standards!');
+            } else {
+                logConsole(`[TOPOLOGY INCOMPLETE] ${placedItems}/${totalItems} security zones configured. Deploy remaining equipment!`, 'amber');
+            }
+        }
+
+        // Render Threat Incidents
+        function renderThreats() {
+            const container = document.getElementById('threat-cards-container');
+            container.innerHTML = '';
+
+            state.threats.forEach(t => {
+                const div = document.createElement('div');
+                div.className = `bg-cyber-bg border ${t.active ? 'border-cyber-neonRed threat-alert-anim' : 'border-slate-800'} p-3 rounded-lg flex flex-col justify-between font-mono cursor-pointer`;
+                div.onclick = () => selectThreat(t.id);
+
+                div.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-bold ${t.active ? 'text-cyber-neonRed glow-red' : 'text-slate-400'}">${t.title}</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded ${t.active ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-slate-800 text-slate-500'}">
+                            ${t.active ? 'ACTIVE THREAT' : 'RESOLVED'}
+                        </span>
+                    </div>
+                    <div class="text-[11px] text-slate-400 mb-2">${t.target}</div>
+                    <div class="text-[10px] text-cyber-neonCyan underline">Click to Investigate & Contain &rarr;</div>
+                `;
+
+                container.appendChild(div);
+            });
+        }
+
+        // Select Active Threat to Resolve
+        function selectThreat(id) {
+            const threat = state.threats.find(t => t.id === id);
+            if (!threat) return;
+
+            state.activeThreatId = id;
+            document.getElementById('threat-terminal').classList.remove('hidden');
+            document.getElementById('active-threat-title').textContent = threat.title.toUpperCase();
+            document.getElementById('active-threat-target').textContent = `Target: ${threat.target}`;
+            document.getElementById('active-threat-desc').textContent = threat.desc;
+
+            const optsContainer = document.getElementById('active-threat-options');
+            optsContainer.innerHTML = '';
+
+            threat.options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full bg-cyber-panel hover:bg-slate-800 text-slate-200 border border-cyber-border hover:border-cyber-neonCyan p-2.5 rounded text-left text-xs font-mono transition flex items-center justify-between';
+                btn.innerHTML = `
+                    <span>${opt.text}</span>
+                    <i class="fa-solid fa-shield text-cyber-neonCyan"></i>
+                `;
+                btn.onclick = () => resolveThreat(threat, opt);
+                optsContainer.appendChild(btn);
+            });
+        }
+
+        // Resolve Threat Logic
+        function resolveThreat(threat, option) {
+            if (option.correct) {
+                threat.active = false;
+                state.securityScore += option.rewardScore;
+                logConsole(`[THREAT NEUTRALIZED] ${option.msg}`, 'green');
+
+                // Activate next threat if available
+                const nextThreat = state.threats.find(t => !t.active && t.id !== threat.id && !t.resolved);
+                if (nextThreat) nextThreat.active = true;
+
+                threat.resolved = true;
+            } else {
+                state.availabilityMW = Math.max(0, state.availabilityMW - option.penaltyMW);
+                logConsole(`[INCIDENT FAILED] ${option.msg}`, 'red');
+            }
+
+            document.getElementById('threat-terminal').classList.add('hidden');
+            renderThreats();
+            updateHUD();
+        }
+
+        // Render Audit Question
+        function renderAuditQuestion() {
+            const q = state.auditQuestions[state.currentAuditIdx];
+            if (!q) return;
+
+            document.getElementById('audit-progress').textContent = `Question ${state.currentAuditIdx + 1} of ${state.auditQuestions.length}`;
+            document.getElementById('audit-question-title').textContent = q.q;
+
+            const container = document.getElementById('audit-options');
+            container.innerHTML = '';
+
+            q.options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full bg-cyber-panel hover:bg-slate-800 text-slate-200 border border-cyber-border hover:border-cyber-neonPurple p-3 rounded text-left text-xs transition flex items-start gap-3';
+                btn.innerHTML = `
+                    <span class="font-bold text-cyber-neonPurple">[Option ${idx + 1}]</span>
+                    <span>${opt.text}</span>
+                `;
+                btn.onclick = () => answerAudit(opt);
+                container.appendChild(btn);
+            });
+        }
+
+        // Answer Audit Question
+        function answerAudit(opt) {
+            if (opt.correct) {
+                state.securityScore += 10;
+                logConsole('[AUDIT CORRECT] Compliance standard validated. Security posture increased by +10%.', 'green');
+            } else {
+                logConsole('[AUDIT FAILED] Non-compliant answer selected. Review IEC 62443 guidelines.', 'red');
+            }
+
+            state.currentAuditIdx = (state.currentAuditIdx + 1) % state.auditQuestions.length;
+            renderAuditQuestion();
+            updateHUD();
+        }
+
+        // Mode Switching
+        function switchMode(mode) {
+            document.querySelectorAll('.mode-tab').forEach(t => {
+                t.classList.remove('bg-cyber-neonCyan', 'text-cyber-bg', 'font-bold');
+                t.classList.add('bg-cyber-panel', 'text-slate-300');
+            });
+
+            document.getElementById(`tab-${mode}`).classList.remove('bg-cyber-panel', 'text-slate-300');
+            document.getElementById(`tab-${mode}`).classList.add('bg-cyber-neonCyan', 'text-cyber-bg', 'font-bold');
+
+            document.getElementById('view-topo').classList.add('hidden');
+            document.getElementById('view-threats').classList.add('hidden');
+            document.getElementById('view-audit').classList.add('hidden');
+
+            document.getElementById(`view-${mode}`).classList.remove('hidden');
+        }
+
+        // Emergency Shield Purchase
+        function purchaseEmergencyShield() {
+            if (state.budget >= 20000) {
+                state.budget -= 20000;
+                state.securityScore = Math.min(100, state.securityScore + 10);
+                logConsole('[PURCHASED] Deep Packet Inspection (DPI) active. Security Score +10%.', 'cyan');
+                updateHUD();
+            } else {
+                logConsole('[BUDGET EXHAUSTED] Not enough funds for DPI upgrade.', 'red');
+            }
+        }
+
+        // Update HUD Metrics
+        function updateHUD() {
+            document.getElementById('hud-budget').textContent = `$${state.budget.toLocaleString()}`;
+            document.getElementById('hud-security').textContent = `${Math.min(100, state.securityScore)}%`;
+
+            const availPct = ((state.availabilityMW / 80.0) * 100).toFixed(1);
+            document.getElementById('hud-availability').textContent = `${state.availabilityMW.toFixed(1)} MW (${availPct}%)`;
+
+            const activeThreatCount = state.threats.filter(t => t.active).length;
+            const threatBadge = document.getElementById('threat-badge');
+            const alertEl = document.getElementById('hud-threat-level');
+            const alertIcon = document.getElementById('hud-threat-icon');
+
+            if (activeThreatCount > 0) {
+                threatBadge.classList.remove('hidden');
+                alertEl.textContent = 'ELEVATED';
+                alertEl.className = 'text-sm font-bold text-amber-400';
+                alertIcon.className = 'fa-solid fa-triangle-exclamation text-amber-400 animate-pulse';
+            } else {
+                threatBadge.classList.add('hidden');
+                alertEl.textContent = 'LOW';
+                alertEl.className = 'text-sm font-bold text-emerald-400';
+                alertIcon.className = 'fa-solid fa-shield-check text-emerald-400';
+            }
+        }
+
+        // Console Logging Helper
+        function logConsole(msg, type = 'default') {
+            const consoleEl = document.getElementById('console-logs');
+            const div = document.createElement('div');
+
+            let colorClass = 'text-slate-300';
+            if (type === 'red') colorClass = 'text-cyber-neonRed font-bold';
+            if (type === 'green') colorClass = 'text-cyber-neonGreen font-bold';
+            if (type === 'cyan') colorClass = 'text-cyber-neonCyan';
+            if (type === 'amber') colorClass = 'text-amber-400';
+
+            div.className = colorClass;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            consoleEl.appendChild(div);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('console-logs').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
