@@ -71,7 +71,7 @@ The simulation models an active 80 MW hybrid generation facility comprising:
 Simply open `ot_cyber_defense_game.html` in Chrome, Firefox, Edge, or Safari.
 
 ### Hosting on GitHub Pages:
-1. Copy `ot_cyber_defense_game.html` to your GitHub repository and rename it to `index.html`.
+1. Copy `index.html` to your GitHub repository.
 2. Go to **Settings > Pages** in your GitHub repository.
 3. Under **Source**, select `Deploy from a branch` and choose `main` / root.
 4. Save settings and launch your live URL!
